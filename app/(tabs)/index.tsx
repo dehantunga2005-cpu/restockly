@@ -1,167 +1,273 @@
-import { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useState } from "react";
 import {
-    Alert,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
-type PlanType = "FREE" | "PRO" | "FOUNDER";
+/* =====================
+   TYPES
+===================== */
+type Plan = "FREE" | "PRO" | "FOUNDER";
 
+type Brand =
+  | "ZARA"
+  | "BERSHKA"
+  | "PULL&BEAR"
+  | "STRADIVARIUS"
+  | "OYSHO";
+
+type TrackedItem = {
+  brand: Brand;
+  link: string;
+};
+
+/* =====================
+   CONSTANTS
+===================== */
+const STORAGE_KEY = "RESTOCKLY_V1";
+
+const PLAN_LIMIT: Record<Plan, number> = {
+  FREE: 1,
+  PRO: 999,
+  FOUNDER: 999,
+};
+
+const PLAN_FREQUENCY: Record<Plan, string> = {
+  FREE: "60 dk",
+  PRO: "10 dk",
+  FOUNDER: "5 dk",
+};
+
+/* =====================
+   HELPERS
+===================== */
+function detectBrand(link: string): Brand | null {
+  const url = link.toLowerCase();
+
+  if (url.includes("bershka.com")) return "BERSHKA";
+  if (url.includes("pullandbear.com")) return "PULL&BEAR";
+  if (url.includes("stradivarius.com")) return "STRADIVARIUS";
+  if (url.includes("oysho.com")) return "OYSHO";
+  if (url.includes("zara.com")) return "ZARA";
+
+  return null;
+}
+
+/* =====================
+   SCREEN
+===================== */
 export default function HomeScreen() {
+  const [plan, setPlan] = useState<Plan>("FREE");
   const [link, setLink] = useState("");
-  const [plan, setPlan] = useState<PlanType>("FREE");
-  const [products, setProducts] = useState<string[]>([]);
+  const [items, setItems] = useState<TrackedItem[]>([]);
+  const [loaded, setLoaded] = useState(false);
 
-  const handleTrack = () => {
+  /* LOAD */
+  useEffect(() => {
+    (async () => {
+      const raw = await AsyncStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setPlan(parsed.plan ?? "FREE");
+        setItems(parsed.items ?? []);
+      }
+      setLoaded(true);
+    })();
+  }, []);
+
+  /* SAVE */
+  useEffect(() => {
+    if (!loaded) return;
+    AsyncStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ plan, items })
+    );
+  }, [plan, items, loaded]);
+
+  /* ADD ITEM */
+  const addItem = () => {
     if (!link.trim()) {
-      Alert.alert("Hata", "Lütfen ürün linki gir");
+      Alert.alert("Hata", "Link boş olamaz");
       return;
     }
 
-    if (plan === "FREE" && products.length >= 1) {
+    const brand = detectBrand(link);
+    if (!brand) {
       Alert.alert(
-        "Limit Doldu",
+        "Desteklenmeyen link",
+        "Sadece Zara, Bershka, Pull&Bear, Stradivarius ve Oysho desteklenir."
+      );
+      return;
+    }
+
+    if (items.length >= PLAN_LIMIT[plan]) {
+      Alert.alert(
+        "Plan Limiti",
         "Free planda sadece 1 ürün takip edebilirsin."
       );
       return;
     }
 
-    setProducts([...products, link]);
+    setItems([...items, { brand, link }]);
     setLink("");
   };
 
-  return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Restockly</Text>
+  /* REMOVE ITEM */
+  const removeItem = (index: number) => {
+    Alert.alert("Kaldır", "Bu ürünü kaldırmak istiyor musun?", [
+      { text: "İptal", style: "cancel" },
+      {
+        text: "Kaldır",
+        style: "destructive",
+        onPress: () => {
+          const copy = [...items];
+          copy.splice(index, 1);
+          setItems(copy);
+        },
+      },
+    ]);
+  };
 
+  /* CHANGE PLAN (UI ONLY) */
+  const changePlan = (p: Plan) => {
+    if (p !== "FREE") {
+      Alert.alert(
+        "Yakında",
+        "Bu paket yakında aktif edilecek."
+      );
+      return;
+    }
+    setPlan(p);
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.title}>Restockly</Text>
       <Text style={styles.subtitle}>
-        {plan === "FREE" &&
-          "Free Plan · 1 ürün · Kontrol: 60 dk · Bildirim gecikmeli"}
-        {plan === "PRO" &&
-          "PRO Plan · Sınırsız ürün · Kontrol: 5 dk · Anında bildirim"}
-        {plan === "FOUNDER" &&
-          "Kurucu Plan · Ömür boyu · Öncelikli sistem"}
+        Plan: {plan} • Kontrol: {PLAN_FREQUENCY[plan]}
       </Text>
 
-      {/* PLAN SEÇİMİ */}
+      {/* PLAN CARDS */}
       <View style={styles.planRow}>
-        <TouchableOpacity
-          style={[
-            styles.planButton,
-            plan === "FREE" && styles.activePlan,
-          ]}
-          onPress={() => setPlan("FREE")}
-        >
-          <Text style={styles.planText}>FREE</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.planButton,
-            plan === "PRO" && styles.activePlan,
-          ]}
-          onPress={() => setPlan("PRO")}
-        >
-          <Text style={styles.planText}>PRO</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.planButton,
-            plan === "FOUNDER" && styles.activePlan,
-          ]}
-          onPress={() => setPlan("FOUNDER")}
-        >
-          <Text style={styles.planText}>KURUCU</Text>
-        </TouchableOpacity>
+        {(["FREE", "PRO", "FOUNDER"] as Plan[]).map((p) => (
+          <TouchableOpacity
+            key={p}
+            style={[
+              styles.planCard,
+              plan === p && styles.planActive,
+            ]}
+            onPress={() => changePlan(p)}
+          >
+            <Text style={styles.planTitle}>{p}</Text>
+            <Text style={styles.planDesc}>
+              {p === "FREE" && "1 ürün • Geç bildirim"}
+              {p === "PRO" && "Sınırsız • 10 dk"}
+              {p === "FOUNDER" &&
+                "Ömür boyu • 5 dk • 2500 kişi"}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
-      {/* LINK INPUT */}
+      {/* INPUT */}
       <TextInput
         style={styles.input}
-        placeholder="Ürün linkini buraya yapıştır"
+        placeholder="Ürün linkini yapıştır"
         placeholderTextColor="#9ca3af"
         value={link}
         onChangeText={setLink}
       />
 
-      <TouchableOpacity style={styles.trackButton} onPress={handleTrack}>
-        <Text style={styles.trackText}>Takibe Al</Text>
+      <TouchableOpacity style={styles.button} onPress={addItem}>
+        <Text style={styles.buttonText}>Takibe Al</Text>
       </TouchableOpacity>
 
-      {/* TAKİP EDİLENLER */}
-      {products.map((item, index) => (
-        <View key={index} style={styles.card}>
-          <Text style={styles.cardTitle}>Takip Edilen Ürün</Text>
-          <Text style={styles.cardLink}>{item}</Text>
-        </View>
+      {/* ITEMS */}
+      {items.map((item, index) => (
+        <TouchableOpacity
+          key={index}
+          style={styles.card}
+          onLongPress={() => removeItem(index)}
+        >
+          <Text style={styles.cardTitle}>{item.brand}</Text>
+          <Text style={styles.cardLink}>{item.link}</Text>
+          <Text style={styles.hint}>Basılı tut → kaldır</Text>
+        </TouchableOpacity>
       ))}
     </ScrollView>
   );
 }
 
+/* =====================
+   STYLES
+===================== */
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
+    padding: 20,
     backgroundColor: "#0f172a",
-    padding: 16,
   },
   title: {
     fontSize: 28,
     fontWeight: "bold",
     color: "white",
-    marginBottom: 6,
+    marginBottom: 4,
   },
   subtitle: {
-    color: "#cbd5f5",
+    color: "#94a3b8",
     marginBottom: 16,
   },
   planRow: {
     flexDirection: "row",
     marginBottom: 16,
   },
-  planButton: {
+  planCard: {
     flex: 1,
-    padding: 10,
-    borderRadius: 8,
     backgroundColor: "#1e293b",
+    padding: 12,
+    borderRadius: 10,
     marginRight: 6,
-    alignItems: "center",
   },
-  activePlan: {
+  planActive: {
     backgroundColor: "#22c55e",
   },
-  planText: {
+  planTitle: {
     color: "white",
     fontWeight: "bold",
+    marginBottom: 4,
+  },
+  planDesc: {
+    color: "#cbd5f5",
+    fontSize: 12,
   },
   input: {
     backgroundColor: "#020617",
     color: "white",
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 12,
   },
-  trackButton: {
+  button: {
     backgroundColor: "#22c55e",
     padding: 14,
     borderRadius: 10,
     alignItems: "center",
     marginBottom: 20,
   },
-  trackText: {
-    color: "white",
+  buttonText: {
+    color: "#000",
     fontWeight: "bold",
-    fontSize: 16,
   },
   card: {
-    backgroundColor: "#020617",
+    backgroundColor: "#12263f",
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 10,
     marginBottom: 10,
   },
   cardTitle: {
@@ -173,13 +279,10 @@ const styles = StyleSheet.create({
     color: "#e5e7eb",
     fontSize: 12,
   },
+  hint: {
+    color: "#9ca3af",
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: "right",
+  },
 });
-
-
-
-
-
-
-
-
-

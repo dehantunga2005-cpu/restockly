@@ -3,19 +3,20 @@ export type Brand =
   | "BERSHKA"
   | "PULL&BEAR"
   | "STRADIVARIUS"
-  | "OYSHO"
-  | null;
+  | "OYSHO";
 
-export default function detectBrand(url: string): Brand {
-  const u = url.toLowerCase();
+export function detectBrand(link: string): Brand | null {
+  const url = link.toLowerCase();
 
-  if (u.includes("zara")) return "ZARA";
-  if (u.includes("bershka")) return "BERSHKA";
-  if (u.includes("pullandbear") || u.includes("pull&bear")) return "PULL&BEAR";
-  if (u.includes("stradivarius")) return "STRADIVARIUS";
-  if (u.includes("oysho")) return "OYSHO";
+  if (url.includes("zara.com")) return "ZARA";
+  if (url.includes("bershka.com")) return "BERSHKA";
+  if (url.includes("pullandbear.com")) return "PULL&BEAR";
+  if (url.includes("stradivarius.com")) return "STRADIVARIUS";
+  if (url.includes("oysho.com")) return "OYSHO";
 
-  return null;
+  return null; // ⚠️ ASLA default ZARA yok
 }
+
+
 
 
