@@ -1,288 +1,209 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useEffect, useState } from "react";
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { useState } from "react";
+import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
-/* =====================
-   TYPES
-===================== */
 type Plan = "FREE" | "PRO" | "FOUNDER";
 
-type Brand =
-  | "ZARA"
-  | "BERSHKA"
-  | "PULL&BEAR"
-  | "STRADIVARIUS"
-  | "OYSHO";
-
-type TrackedItem = {
-  brand: Brand;
-  link: string;
-};
-
-/* =====================
-   CONSTANTS
-===================== */
-const STORAGE_KEY = "RESTOCKLY_V1";
-
-const PLAN_LIMIT: Record<Plan, number> = {
-  FREE: 1,
-  PRO: 999,
-  FOUNDER: 999,
-};
-
-const PLAN_FREQUENCY: Record<Plan, string> = {
-  FREE: "60 dk",
-  PRO: "10 dk",
-  FOUNDER: "5 dk",
-};
-
-/* =====================
-   HELPERS
-===================== */
-function detectBrand(link: string): Brand | null {
-  const url = link.toLowerCase();
-
-  if (url.includes("bershka.com")) return "BERSHKA";
-  if (url.includes("pullandbear.com")) return "PULL&BEAR";
-  if (url.includes("stradivarius.com")) return "STRADIVARIUS";
-  if (url.includes("oysho.com")) return "OYSHO";
-  if (url.includes("zara.com")) return "ZARA";
-
-  return null;
-}
-
-/* =====================
-   SCREEN
-===================== */
 export default function HomeScreen() {
-  const [plan, setPlan] = useState<Plan>("FREE");
-  const [link, setLink] = useState("");
-  const [items, setItems] = useState<TrackedItem[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const [activePlan, setActivePlan] = useState<Plan>("FREE");
+  const [productLink, setProductLink] = useState("");
+  const [products, setProducts] = useState<string[]>([]);
 
-  /* LOAD */
-  useEffect(() => {
-    (async () => {
-      const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setPlan(parsed.plan ?? "FREE");
-        setItems(parsed.items ?? []);
-      }
-      setLoaded(true);
-    })();
-  }, []);
+  const isUnlimited = activePlan === "PRO" || activePlan === "FOUNDER";
+  const freeLimit = 1;
 
-  /* SAVE */
-  useEffect(() => {
-    if (!loaded) return;
-    AsyncStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ plan, items })
+  const addProduct = () => {
+    if (!productLink.trim()) {
+      Alert.alert("Hata", "Ürün linki boş olamaz");
+      return;
+    }
+
+    if (!isUnlimited && products.length >= freeLimit) {
+      Alert.alert(
+        "Limit Doldu",
+        "Free plan sadece 1 ürün ekleyebilir. Pro veya Founder’a geç."
+      );
+      return;
+    }
+
+    setProducts((prev) => [...prev, productLink.trim()]);
+    setProductLink("");
+  };
+
+  const removeProduct = (index: number) => {
+    setProducts((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const activatePlan = (plan: Plan) => {
+    setActivePlan(plan);
+    Alert.alert(
+      "Satın Alma (Test)",
+      `${plan} planı test olarak aktif edildi`,
+      [{ text: "OK" }]
     );
-  }, [plan, items, loaded]);
-
-  /* ADD ITEM */
-  const addItem = () => {
-    if (!link.trim()) {
-      Alert.alert("Hata", "Link boş olamaz");
-      return;
-    }
-
-    const brand = detectBrand(link);
-    if (!brand) {
-      Alert.alert(
-        "Desteklenmeyen link",
-        "Sadece Zara, Bershka, Pull&Bear, Stradivarius ve Oysho desteklenir."
-      );
-      return;
-    }
-
-    if (items.length >= PLAN_LIMIT[plan]) {
-      Alert.alert(
-        "Plan Limiti",
-        "Free planda sadece 1 ürün takip edebilirsin."
-      );
-      return;
-    }
-
-    setItems([...items, { brand, link }]);
-    setLink("");
-  };
-
-  /* REMOVE ITEM */
-  const removeItem = (index: number) => {
-    Alert.alert("Kaldır", "Bu ürünü kaldırmak istiyor musun?", [
-      { text: "İptal", style: "cancel" },
-      {
-        text: "Kaldır",
-        style: "destructive",
-        onPress: () => {
-          const copy = [...items];
-          copy.splice(index, 1);
-          setItems(copy);
-        },
-      },
-    ]);
-  };
-
-  /* CHANGE PLAN (UI ONLY) */
-  const changePlan = (p: Plan) => {
-    if (p !== "FREE") {
-      Alert.alert(
-        "Yakında",
-        "Bu paket yakında aktif edilecek."
-      );
-      return;
-    }
-    setPlan(p);
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <View style={styles.container}>
       <Text style={styles.title}>Restockly</Text>
-      <Text style={styles.subtitle}>
-        Plan: {plan} • Kontrol: {PLAN_FREQUENCY[plan]}
-      </Text>
+      <Text style={styles.subtitle}>Aktif Plan: {activePlan}</Text>
 
-      {/* PLAN CARDS */}
-      <View style={styles.planRow}>
-        {(["FREE", "PRO", "FOUNDER"] as Plan[]).map((p) => (
-          <TouchableOpacity
-            key={p}
-            style={[
-              styles.planCard,
-              plan === p && styles.planActive,
-            ]}
-            onPress={() => changePlan(p)}
-          >
-            <Text style={styles.planTitle}>{p}</Text>
-            <Text style={styles.planDesc}>
-              {p === "FREE" && "1 ürün • Geç bildirim"}
-              {p === "PRO" && "Sınırsız • 10 dk"}
-              {p === "FOUNDER" &&
-                "Ömür boyu • 5 dk • 2500 kişi"}
-            </Text>
+      {/* PLANLAR */}
+      <View style={styles.planCard}>
+        <Text style={styles.planTitle}>Free</Text>
+        <Text style={styles.planText}>• 1 ürün takibi</Text>
+        <Text style={styles.planText}>• Bildirim geç gelebilir</Text>
+        {activePlan === "FREE" ? (
+          <Text style={styles.active}>AKTİF</Text>
+        ) : (
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => activatePlan("FREE")}>
+            <Text style={styles.btnTextDark}>Free’e Geç</Text>
           </TouchableOpacity>
-        ))}
+        )}
       </View>
 
-      {/* INPUT */}
-      <TextInput
-        style={styles.input}
-        placeholder="Ürün linkini yapıştır"
-        placeholderTextColor="#9ca3af"
-        value={link}
-        onChangeText={setLink}
-      />
+      <View style={styles.planCard}>
+        <Text style={styles.planTitle}>Pro</Text>
+        <Text style={styles.planText}>• Sınırsız ürün</Text>
+        <Text style={styles.planText}>• Hızlı bildirim</Text>
+        {activePlan === "PRO" ? (
+          <Text style={styles.active}>AKTİF</Text>
+        ) : (
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => activatePlan("PRO")}>
+            <Text style={styles.btnTextLight}>Pro’ya Geç</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
-      <TouchableOpacity style={styles.button} onPress={addItem}>
-        <Text style={styles.buttonText}>Takibe Al</Text>
-      </TouchableOpacity>
+      <View style={styles.planCard}>
+        <Text style={styles.planTitle}>Founder</Text>
+        <Text style={styles.planText}>• Ömür boyu erişim</Text>
+        <Text style={styles.planText}>• En yüksek öncelik</Text>
+        {activePlan === "FOUNDER" ? (
+          <Text style={styles.active}>AKTİF</Text>
+        ) : (
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => activatePlan("FOUNDER")}>
+            <Text style={styles.btnTextLight}>Founder Ol</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
-      {/* ITEMS */}
-      {items.map((item, index) => (
-        <TouchableOpacity
-          key={index}
-          style={styles.card}
-          onLongPress={() => removeItem(index)}
-        >
-          <Text style={styles.cardTitle}>{item.brand}</Text>
-          <Text style={styles.cardLink}>{item.link}</Text>
-          <Text style={styles.hint}>Basılı tut → kaldır</Text>
+      {/* ÜRÜN EKLEME */}
+      <View style={styles.addBox}>
+        <Text style={styles.sectionTitle}>Ürün Ekle</Text>
+        <TextInput
+          placeholder="Ürün linkini yapıştır"
+          value={productLink}
+          onChangeText={setProductLink}
+          style={styles.input}
+          autoCapitalize="none"
+        />
+        <TouchableOpacity style={styles.primaryBtn} onPress={addProduct}>
+          <Text style={styles.btnTextLight}>Takibe Ekle</Text>
         </TouchableOpacity>
-      ))}
-    </ScrollView>
+
+        {!isUnlimited && (
+          <Text style={styles.limitInfo}>
+            Free plan: {products.length}/{freeLimit} ürün
+          </Text>
+        )}
+      </View>
+
+      {/* ÜRÜN LİSTESİ */}
+      <View style={styles.listBox}>
+        <Text style={styles.sectionTitle}>Takip Edilen Ürünler</Text>
+
+        {products.length === 0 ? (
+          <Text style={styles.empty}>Henüz ürün eklenmedi</Text>
+        ) : (
+          <FlatList
+            data={products}
+            keyExtractor={(_, i) => i.toString()}
+            renderItem={({ item, index }) => (
+              <View style={styles.productItem}>
+                <Text style={styles.productText} numberOfLines={1}>
+                  {item}
+                </Text>
+                <TouchableOpacity onPress={() => removeProduct(index)}>
+                  <Text style={styles.remove}>Sil</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          />
+        )}
+      </View>
+    </View>
   );
 }
 
-/* =====================
-   STYLES
-===================== */
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    padding: 20,
-    backgroundColor: "#0f172a",
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    color: "white",
-    marginBottom: 4,
-  },
-  subtitle: {
-    color: "#94a3b8",
-    marginBottom: 16,
-  },
-  planRow: {
-    flexDirection: "row",
-    marginBottom: 16,
-  },
+  container: { flex: 1, padding: 16, backgroundColor: "#f9f9f9" },
+  title: { fontSize: 26, fontWeight: "bold", marginBottom: 4 },
+  subtitle: { marginBottom: 12, color: "#555" },
+
   planCard: {
-    flex: 1,
-    backgroundColor: "#1e293b",
-    padding: 12,
+    backgroundColor: "#fff",
     borderRadius: 10,
-    marginRight: 6,
-  },
-  planActive: {
-    backgroundColor: "#22c55e",
-  },
-  planTitle: {
-    color: "white",
-    fontWeight: "bold",
-    marginBottom: 4,
-  },
-  planDesc: {
-    color: "#cbd5f5",
-    fontSize: 12,
-  },
-  input: {
-    backgroundColor: "#020617",
-    color: "white",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 12,
-  },
-  button: {
-    backgroundColor: "#22c55e",
     padding: 14,
-    borderRadius: 10,
-    alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#ddd",
   },
-  buttonText: {
-    color: "#000",
-    fontWeight: "bold",
-  },
-  card: {
-    backgroundColor: "#12263f",
+  planTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 6 },
+  planText: { fontSize: 14, marginBottom: 2 },
+  active: { marginTop: 8, color: "green", fontWeight: "bold" },
+
+  primaryBtn: {
+    marginTop: 8,
+    backgroundColor: "#000",
     padding: 12,
+    borderRadius: 8,
+  },
+  secondaryBtn: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#000",
+    padding: 12,
+    borderRadius: 8,
+  },
+  btnTextLight: { color: "#fff", textAlign: "center", fontWeight: "bold" },
+  btnTextDark: { textAlign: "center", fontWeight: "bold" },
+
+  addBox: {
+    backgroundColor: "#fff",
     borderRadius: 10,
-    marginBottom: 10,
+    padding: 14,
+    marginTop: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#ddd",
   },
-  cardTitle: {
-    color: "#60a5fa",
-    fontWeight: "bold",
-    marginBottom: 4,
+  sectionTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 8 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
   },
-  cardLink: {
-    color: "#e5e7eb",
-    fontSize: 12,
+  limitInfo: { marginTop: 6, color: "#888" },
+
+  listBox: {
+    backgroundColor: "#fff",
+    borderRadius: 10,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    flex: 1,
   },
-  hint: {
-    color: "#9ca3af",
-    fontSize: 11,
-    marginTop: 6,
-    textAlign: "right",
+  empty: { color: "#777" },
+  productItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
   },
+  productText: { flex: 1, marginRight: 8 },
+  remove: { color: "red", fontWeight: "bold" },
 });
