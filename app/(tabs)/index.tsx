@@ -1,207 +1,207 @@
-import { useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useEffect, useState } from "react";
 import {
-  ScrollView,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from "react-native";
 
-type Plan = "FREE" | "PRO_MONTHLY" | "PRO_YEARLY" | "FOUNDER";
+type Item = {
+  id: string;
+  brand: string;
+  url: string;
+  status: "IN" | "OUT";
+};
 
-export default function HomeScreen() {
-  const [plan, setPlan] = useState<Plan>("FREE");
-  const [productLink, setProductLink] = useState("");
-  const [products, setProducts] = useState<string[]>([]);
+const STORAGE_KEY = "@restockly_items";
 
-  const maxProducts =
-    plan === "FREE" ? 1 : Infinity;
+export default function Index() {
+  const [url, setUrl] = useState("");
+  const [items, setItems] = useState<Item[]>([]);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [hydrated, setHydrated] = useState(false);
 
-  const canAddProduct = products.length < maxProducts;
+  // 🔹 Load saved items
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(STORAGE_KEY);
+        if (saved) setItems(JSON.parse(saved));
+      } catch {}
+      setHydrated(true);
+    })();
+  }, []);
 
-  const addProduct = () => {
-    if (!productLink.trim()) return;
-    if (!canAddProduct) return;
+  // 🔹 Save on every change
+  useEffect(() => {
+    if (hydrated) {
+      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+    }
+  }, [items, hydrated]);
 
-    setProducts((prev) => [...prev, productLink.trim()]);
-    setProductLink("");
+  const detectBrand = (link: string) => {
+    if (link.includes("zara")) return "Zara";
+    if (link.includes("bershka")) return "Bershka";
+    if (link.includes("pullandbear")) return "Pull&Bear";
+    if (link.includes("stradivarius")) return "Stradivarius";
+    if (link.includes("oysho")) return "Oysho";
+    return null;
   };
 
-  const removeProduct = (index: number) => {
-    setProducts((prev) => prev.filter((_, i) => i !== index));
+  const addItem = () => {
+    const brand = detectBrand(url.toLowerCase());
+    if (!brand) {
+      Alert.alert("Hata", "Desteklenmeyen marka");
+      return;
+    }
+
+    setItems((prev) => [
+      {
+        id: Date.now().toString(),
+        brand,
+        url,
+        status: Math.random() > 0.5 ? "IN" : "OUT",
+      },
+      ...prev,
+    ]);
+
+    setUrl("");
   };
 
-  const PlanCard = ({
-    title,
-    description,
-    price,
-    active,
-    buttonText,
-    onPress,
-  }: {
-    title: string;
-    description: string[];
-    price?: string;
-    active?: boolean;
-    buttonText?: string;
-    onPress?: () => void;
-  }) => (
-    <View style={styles.card}>
-      <Text style={styles.planTitle}>{title}</Text>
-      {description.map((d, i) => (
-        <Text key={i} style={styles.text}>• {d}</Text>
-      ))}
-      {price && <Text style={styles.price}>{price}</Text>}
+  const recheck = (id: string) => {
+    setLoadingId(id);
+    Alert.alert("Kontrol", "Stok yeniden kontrol ediliyor");
 
-      {active ? (
-        <Text style={styles.active}>AKTİF</Text>
-      ) : (
-        buttonText && onPress && (
-          <TouchableOpacity style={styles.button} onPress={onPress}>
-            <Text style={styles.buttonText}>{buttonText}</Text>
-          </TouchableOpacity>
+    setTimeout(() => {
+      setItems((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? { ...i, status: Math.random() > 0.5 ? "IN" : "OUT" }
+            : i
         )
-      )}
-    </View>
-  );
+      );
+      setLoadingId(null);
+      Alert.alert("Bitti", "Stok durumu güncellendi");
+    }, 1500);
+  };
+
+  const remove = (id: string) => {
+    setItems((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  if (!hydrated) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" color="#fff" />
+      </View>
+    );
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.header}>Restockly</Text>
+    <View style={styles.container}>
+      <Text style={styles.title}>Stok Takibi</Text>
 
-      {/* FREE */}
-      <PlanCard
-        title="Free"
-        description={[
-          "1 ürün takibi",
-          "Bildirim geç gelebilir",
-        ]}
-        active={plan === "FREE"}
-        buttonText="Free’ye Geç"
-        onPress={() => setPlan("FREE")}
-      />
-
-      {/* PRO MONTHLY */}
-      <PlanCard
-        title="Pro Aylık"
-        description={[
-          "Sınırsız ürün",
-          "Hızlı bildirim",
-        ]}
-        price="79 TL / ay"
-        active={plan === "PRO_MONTHLY"}
-        buttonText="Pro Aylık’a Geç"
-        onPress={() => setPlan("PRO_MONTHLY")}
-      />
-
-      {/* PRO YEARLY */}
-      <PlanCard
-        title="Pro Yıllık"
-        description={[
-          "Sınırsız ürün",
-          "Hızlı bildirim",
-        ]}
-        price="399 TL / yıl"
-        active={plan === "PRO_YEARLY"}
-        buttonText="Pro Yıllık’a Geç"
-        onPress={() => setPlan("PRO_YEARLY")}
-      />
-
-      {/* FOUNDER */}
-      <PlanCard
-        title="Founder"
-        description={[
-          "Ömür boyu erişim",
-          "En hızlı bildirim",
-          "2500 kişiyle sınırlı",
-        ]}
-        price="400 TL (tek seferlik)"
-        active={plan === "FOUNDER"}
-        buttonText="Founder Ol"
-        onPress={() => setPlan("FOUNDER")}
-      />
-
-      {/* PRODUCT INPUT */}
-      <View style={styles.card}>
-        <Text style={styles.planTitle}>Ürün Ekle</Text>
+      <View style={styles.row}>
         <TextInput
-          value={productLink}
-          onChangeText={setProductLink}
-          placeholder="Ürün linkini yapıştır"
+          value={url}
+          onChangeText={setUrl}
+          placeholder="Ürün linki"
+          placeholderTextColor="#777"
           style={styles.input}
         />
-        <TouchableOpacity
-          style={[
-            styles.button,
-            !canAddProduct && { backgroundColor: "#aaa" },
-          ]}
-          disabled={!canAddProduct}
-          onPress={addProduct}
-        >
-          <Text style={styles.buttonText}>Takibe Ekle</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.muted}>
-          {products.length}/{maxProducts === Infinity ? "∞" : maxProducts} ürün
-        </Text>
+        <Pressable style={styles.addBtn} onPress={addItem}>
+          <Text style={styles.addText}>Ekle</Text>
+        </Pressable>
       </View>
 
-      {/* PRODUCT LIST */}
-      <View style={styles.card}>
-        <Text style={styles.planTitle}>Takip Edilen Ürünler</Text>
-        {products.length === 0 ? (
-          <Text style={styles.muted}>Henüz ürün eklenmedi</Text>
-        ) : (
-          products.map((p, i) => (
-            <View key={i} style={styles.row}>
-              <Text style={styles.link}>{p}</Text>
-              <TouchableOpacity onPress={() => removeProduct(i)}>
-                <Text style={styles.remove}>Kaldır</Text>
-              </TouchableOpacity>
+      <FlatList
+        data={items}
+        keyExtractor={(i) => i.id}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Text style={styles.brand}>{item.brand}</Text>
+            <Text style={styles.url}>{item.url}</Text>
+
+            <Text
+              style={[
+                styles.status,
+                item.status === "IN" ? styles.in : styles.out,
+              ]}
+            >
+              {item.status === "IN" ? "STOKTA" : "STOKTA DEĞİL"}
+            </Text>
+
+            <View style={styles.actions}>
+              <Pressable
+                style={styles.btn}
+                onPress={() => recheck(item.id)}
+              >
+                {loadingId === item.id ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.btnText}>Yeniden Kontrol</Text>
+                )}
+              </Pressable>
+
+              <Pressable onPress={() => remove(item.id)}>
+                <Text style={styles.remove}>Sil</Text>
+              </Pressable>
             </View>
-          ))
+          </View>
         )}
-      </View>
-    </ScrollView>
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, paddingBottom: 40 },
-  header: { fontSize: 24, fontWeight: "bold", marginBottom: 16 },
-  card: {
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 12,
+  center: {
+    flex: 1,
+    backgroundColor: "#0f0f0f",
+    justifyContent: "center",
+    alignItems: "center",
   },
-  planTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 4 },
-  text: { fontSize: 14 },
-  price: { fontSize: 16, fontWeight: "bold", marginTop: 4 },
-  active: { color: "green", fontWeight: "bold", marginTop: 8 },
-  button: {
-    backgroundColor: "#000",
-    padding: 10,
-    borderRadius: 6,
-    marginTop: 8,
-  },
-  buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
+  container: { flex: 1, padding: 16, backgroundColor: "#0f0f0f" },
+  title: { color: "#fff", fontSize: 22, fontWeight: "700", marginBottom: 12 },
+  row: { flexDirection: "row", marginBottom: 12 },
   input: {
-    borderWidth: 1,
-    borderColor: "#ccc",
+    flex: 1,
+    backgroundColor: "#1e1e1e",
+    color: "#fff",
+    padding: 12,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  addBtn: {
+    backgroundColor: "#3b82f6",
+    paddingHorizontal: 14,
+    justifyContent: "center",
+    borderRadius: 8,
+  },
+  addText: { color: "#fff", fontWeight: "700" },
+  card: {
+    backgroundColor: "#1b1b1b",
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 10,
+  },
+  brand: { color: "#fff", fontWeight: "700" },
+  url: { color: "#aaa", fontSize: 12 },
+  status: { marginVertical: 6, fontWeight: "700" },
+  in: { color: "#22c55e" },
+  out: { color: "#ef4444" },
+  actions: { flexDirection: "row", gap: 14, alignItems: "center" },
+  btn: {
+    backgroundColor: "#000",
+    paddingVertical: 8,
+    paddingHorizontal: 14,
     borderRadius: 6,
-    padding: 8,
-    marginTop: 8,
   },
-  muted: { color: "#666", marginTop: 6 },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 6,
-  },
-  link: { fontSize: 12, flex: 1 },
-  remove: { color: "red", marginLeft: 8 },
+  btnText: { color: "#fff", fontWeight: "700" },
+  remove: { color: "#f87171" },
 });
-
