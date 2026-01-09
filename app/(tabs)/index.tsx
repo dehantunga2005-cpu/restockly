@@ -1,29 +1,28 @@
 import { useState } from "react";
-import { Alert, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-type Plan = "FREE" | "PRO" | "FOUNDER";
+type Plan = "FREE" | "PRO_MONTHLY" | "PRO_YEARLY" | "FOUNDER";
 
 export default function HomeScreen() {
-  const [activePlan, setActivePlan] = useState<Plan>("FREE");
+  const [plan, setPlan] = useState<Plan>("FREE");
   const [productLink, setProductLink] = useState("");
   const [products, setProducts] = useState<string[]>([]);
 
-  const isUnlimited = activePlan === "PRO" || activePlan === "FOUNDER";
-  const freeLimit = 1;
+  const maxProducts =
+    plan === "FREE" ? 1 : Infinity;
+
+  const canAddProduct = products.length < maxProducts;
 
   const addProduct = () => {
-    if (!productLink.trim()) {
-      Alert.alert("Hata", "Ürün linki boş olamaz");
-      return;
-    }
-
-    if (!isUnlimited && products.length >= freeLimit) {
-      Alert.alert(
-        "Limit Doldu",
-        "Free plan sadece 1 ürün ekleyebilir. Pro veya Founder’a geç."
-      );
-      return;
-    }
+    if (!productLink.trim()) return;
+    if (!canAddProduct) return;
 
     setProducts((prev) => [...prev, productLink.trim()]);
     setProductLink("");
@@ -33,177 +32,176 @@ export default function HomeScreen() {
     setProducts((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const activatePlan = (plan: Plan) => {
-    setActivePlan(plan);
-    Alert.alert(
-      "Satın Alma (Test)",
-      `${plan} planı test olarak aktif edildi`,
-      [{ text: "OK" }]
-    );
-  };
+  const PlanCard = ({
+    title,
+    description,
+    price,
+    active,
+    buttonText,
+    onPress,
+  }: {
+    title: string;
+    description: string[];
+    price?: string;
+    active?: boolean;
+    buttonText?: string;
+    onPress?: () => void;
+  }) => (
+    <View style={styles.card}>
+      <Text style={styles.planTitle}>{title}</Text>
+      {description.map((d, i) => (
+        <Text key={i} style={styles.text}>• {d}</Text>
+      ))}
+      {price && <Text style={styles.price}>{price}</Text>}
+
+      {active ? (
+        <Text style={styles.active}>AKTİF</Text>
+      ) : (
+        buttonText && onPress && (
+          <TouchableOpacity style={styles.button} onPress={onPress}>
+            <Text style={styles.buttonText}>{buttonText}</Text>
+          </TouchableOpacity>
+        )
+      )}
+    </View>
+  );
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Restockly</Text>
-      <Text style={styles.subtitle}>Aktif Plan: {activePlan}</Text>
+    <ScrollView contentContainerStyle={styles.container}>
+      <Text style={styles.header}>Restockly</Text>
 
-      {/* PLANLAR */}
-      <View style={styles.planCard}>
-        <Text style={styles.planTitle}>Free</Text>
-        <Text style={styles.planText}>• 1 ürün takibi</Text>
-        <Text style={styles.planText}>• Bildirim geç gelebilir</Text>
-        {activePlan === "FREE" ? (
-          <Text style={styles.active}>AKTİF</Text>
-        ) : (
-          <TouchableOpacity style={styles.secondaryBtn} onPress={() => activatePlan("FREE")}>
-            <Text style={styles.btnTextDark}>Free’e Geç</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* FREE */}
+      <PlanCard
+        title="Free"
+        description={[
+          "1 ürün takibi",
+          "Bildirim geç gelebilir",
+        ]}
+        active={plan === "FREE"}
+        buttonText="Free’ye Geç"
+        onPress={() => setPlan("FREE")}
+      />
 
-      <View style={styles.planCard}>
-        <Text style={styles.planTitle}>Pro</Text>
-        <Text style={styles.planText}>• Sınırsız ürün</Text>
-        <Text style={styles.planText}>• Hızlı bildirim</Text>
-        {activePlan === "PRO" ? (
-          <Text style={styles.active}>AKTİF</Text>
-        ) : (
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => activatePlan("PRO")}>
-            <Text style={styles.btnTextLight}>Pro’ya Geç</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* PRO MONTHLY */}
+      <PlanCard
+        title="Pro Aylık"
+        description={[
+          "Sınırsız ürün",
+          "Hızlı bildirim",
+        ]}
+        price="79 TL / ay"
+        active={plan === "PRO_MONTHLY"}
+        buttonText="Pro Aylık’a Geç"
+        onPress={() => setPlan("PRO_MONTHLY")}
+      />
 
-      <View style={styles.planCard}>
-        <Text style={styles.planTitle}>Founder</Text>
-        <Text style={styles.planText}>• Ömür boyu erişim</Text>
-        <Text style={styles.planText}>• En yüksek öncelik</Text>
-        {activePlan === "FOUNDER" ? (
-          <Text style={styles.active}>AKTİF</Text>
-        ) : (
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => activatePlan("FOUNDER")}>
-            <Text style={styles.btnTextLight}>Founder Ol</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      {/* PRO YEARLY */}
+      <PlanCard
+        title="Pro Yıllık"
+        description={[
+          "Sınırsız ürün",
+          "Hızlı bildirim",
+        ]}
+        price="399 TL / yıl"
+        active={plan === "PRO_YEARLY"}
+        buttonText="Pro Yıllık’a Geç"
+        onPress={() => setPlan("PRO_YEARLY")}
+      />
 
-      {/* ÜRÜN EKLEME */}
-      <View style={styles.addBox}>
-        <Text style={styles.sectionTitle}>Ürün Ekle</Text>
+      {/* FOUNDER */}
+      <PlanCard
+        title="Founder"
+        description={[
+          "Ömür boyu erişim",
+          "En hızlı bildirim",
+          "2500 kişiyle sınırlı",
+        ]}
+        price="400 TL (tek seferlik)"
+        active={plan === "FOUNDER"}
+        buttonText="Founder Ol"
+        onPress={() => setPlan("FOUNDER")}
+      />
+
+      {/* PRODUCT INPUT */}
+      <View style={styles.card}>
+        <Text style={styles.planTitle}>Ürün Ekle</Text>
         <TextInput
-          placeholder="Ürün linkini yapıştır"
           value={productLink}
           onChangeText={setProductLink}
+          placeholder="Ürün linkini yapıştır"
           style={styles.input}
-          autoCapitalize="none"
         />
-        <TouchableOpacity style={styles.primaryBtn} onPress={addProduct}>
-          <Text style={styles.btnTextLight}>Takibe Ekle</Text>
+        <TouchableOpacity
+          style={[
+            styles.button,
+            !canAddProduct && { backgroundColor: "#aaa" },
+          ]}
+          disabled={!canAddProduct}
+          onPress={addProduct}
+        >
+          <Text style={styles.buttonText}>Takibe Ekle</Text>
         </TouchableOpacity>
 
-        {!isUnlimited && (
-          <Text style={styles.limitInfo}>
-            Free plan: {products.length}/{freeLimit} ürün
-          </Text>
-        )}
+        <Text style={styles.muted}>
+          {products.length}/{maxProducts === Infinity ? "∞" : maxProducts} ürün
+        </Text>
       </View>
 
-      {/* ÜRÜN LİSTESİ */}
-      <View style={styles.listBox}>
-        <Text style={styles.sectionTitle}>Takip Edilen Ürünler</Text>
-
+      {/* PRODUCT LIST */}
+      <View style={styles.card}>
+        <Text style={styles.planTitle}>Takip Edilen Ürünler</Text>
         {products.length === 0 ? (
-          <Text style={styles.empty}>Henüz ürün eklenmedi</Text>
+          <Text style={styles.muted}>Henüz ürün eklenmedi</Text>
         ) : (
-          <FlatList
-            data={products}
-            keyExtractor={(_, i) => i.toString()}
-            renderItem={({ item, index }) => (
-              <View style={styles.productItem}>
-                <Text style={styles.productText} numberOfLines={1}>
-                  {item}
-                </Text>
-                <TouchableOpacity onPress={() => removeProduct(index)}>
-                  <Text style={styles.remove}>Sil</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          />
+          products.map((p, i) => (
+            <View key={i} style={styles.row}>
+              <Text style={styles.link}>{p}</Text>
+              <TouchableOpacity onPress={() => removeProduct(i)}>
+                <Text style={styles.remove}>Kaldır</Text>
+              </TouchableOpacity>
+            </View>
+          ))
         )}
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 16, backgroundColor: "#f9f9f9" },
-  title: { fontSize: 26, fontWeight: "bold", marginBottom: 4 },
-  subtitle: { marginBottom: 12, color: "#555" },
-
-  planCard: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 14,
-    marginBottom: 12,
+  container: { padding: 16, paddingBottom: 40 },
+  header: { fontSize: 24, fontWeight: "bold", marginBottom: 16 },
+  card: {
     borderWidth: 1,
     borderColor: "#ddd",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
   },
-  planTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 6 },
-  planText: { fontSize: 14, marginBottom: 2 },
-  active: { marginTop: 8, color: "green", fontWeight: "bold" },
-
-  primaryBtn: {
-    marginTop: 8,
+  planTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 4 },
+  text: { fontSize: 14 },
+  price: { fontSize: 16, fontWeight: "bold", marginTop: 4 },
+  active: { color: "green", fontWeight: "bold", marginTop: 8 },
+  button: {
     backgroundColor: "#000",
-    padding: 12,
-    borderRadius: 8,
-  },
-  secondaryBtn: {
+    padding: 10,
+    borderRadius: 6,
     marginTop: 8,
-    borderWidth: 1,
-    borderColor: "#000",
-    padding: 12,
-    borderRadius: 8,
   },
-  btnTextLight: { color: "#fff", textAlign: "center", fontWeight: "bold" },
-  btnTextDark: { textAlign: "center", fontWeight: "bold" },
-
-  addBox: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 14,
-    marginTop: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-  sectionTitle: { fontSize: 16, fontWeight: "bold", marginBottom: 8 },
+  buttonText: { color: "#fff", textAlign: "center", fontWeight: "bold" },
   input: {
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 8,
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 8,
   },
-  limitInfo: { marginTop: 6, color: "#888" },
-
-  listBox: {
-    backgroundColor: "#fff",
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    flex: 1,
-  },
-  empty: { color: "#777" },
-  productItem: {
+  muted: { color: "#666", marginTop: 6 },
+  row: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
+    marginTop: 6,
   },
-  productText: { flex: 1, marginRight: 8 },
-  remove: { color: "red", fontWeight: "bold" },
+  link: { fontSize: 12, flex: 1 },
+  remove: { color: "red", marginLeft: 8 },
 });
+
