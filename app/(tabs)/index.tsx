@@ -1,207 +1,176 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useEffect, useState } from "react";
+import { useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
   FlatList,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 
-type Item = {
+type Product = {
   id: string;
-  brand: string;
   url: string;
-  status: "IN" | "OUT";
+  status: "checking" | "in" | "out" | "error";
 };
 
-const STORAGE_KEY = "@restockly_items";
+const ZARA_FUNCTION_URL =
+  "https://us-central1-restockly-444e2.cloudfunctions.net/checkZaraStock";
 
-export default function Index() {
+export default function HomeScreen() {
   const [url, setUrl] = useState("");
-  const [items, setItems] = useState<Item[]>([]);
-  const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [hydrated, setHydrated] = useState(false);
+  const [items, setItems] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // 🔹 Load saved items
-  useEffect(() => {
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(STORAGE_KEY);
-        if (saved) setItems(JSON.parse(saved));
-      } catch {}
-      setHydrated(true);
-    })();
-  }, []);
-
-  // 🔹 Save on every change
-  useEffect(() => {
-    if (hydrated) {
-      AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-    }
-  }, [items, hydrated]);
-
-  const detectBrand = (link: string) => {
-    if (link.includes("zara")) return "Zara";
-    if (link.includes("bershka")) return "Bershka";
-    if (link.includes("pullandbear")) return "Pull&Bear";
-    if (link.includes("stradivarius")) return "Stradivarius";
-    if (link.includes("oysho")) return "Oysho";
-    return null;
-  };
-
-  const addItem = () => {
-    const brand = detectBrand(url.toLowerCase());
-    if (!brand) {
-      Alert.alert("Hata", "Desteklenmeyen marka");
+  const addProduct = async () => {
+    if (!url.includes("zara.com")) {
+      Alert.alert("Hata", "Lütfen geçerli bir Zara linki gir");
       return;
     }
 
-    setItems((prev) => [
-      {
-        id: Date.now().toString(),
-        brand,
-        url,
-        status: Math.random() > 0.5 ? "IN" : "OUT",
-      },
-      ...prev,
-    ]);
+    const id = Date.now().toString();
+    const newItem: Product = {
+      id,
+      url,
+      status: "checking",
+    };
 
+    setItems((prev) => [newItem, ...prev]);
     setUrl("");
+
+    await checkProduct(id, url);
   };
 
-  const recheck = (id: string) => {
-    setLoadingId(id);
-    Alert.alert("Kontrol", "Stok yeniden kontrol ediliyor");
-
-    setTimeout(() => {
+  const checkProduct = async (id: string, productUrl: string) => {
+    try {
       setItems((prev) =>
-        prev.map((i) =>
-          i.id === id
-            ? { ...i, status: Math.random() > 0.5 ? "IN" : "OUT" }
-            : i
+        prev.map((p) =>
+          p.id === id ? { ...p, status: "checking" } : p
         )
       );
-      setLoadingId(null);
-      Alert.alert("Bitti", "Stok durumu güncellendi");
-    }, 1500);
+
+      const res = await fetch(ZARA_FUNCTION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: productUrl }),
+      });
+
+      const data = await res.json();
+
+      setItems((prev) =>
+        prev.map((p) =>
+          p.id === id
+            ? {
+                ...p,
+                status: data.inStock ? "in" : "out",
+              }
+            : p
+        )
+      );
+    } catch (e) {
+      setItems((prev) =>
+        prev.map((p) =>
+          p.id === id ? { ...p, status: "error" } : p
+        )
+      );
+    }
   };
 
-  const remove = (id: string) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
-  };
+  const renderItem = ({ item }: { item: Product }) => (
+    <View style={styles.card}>
+      <Text style={styles.url} numberOfLines={2}>
+        {item.url}
+      </Text>
 
-  if (!hydrated) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#fff" />
-      </View>
-    );
-  }
+      <Text
+        style={[
+          styles.status,
+          item.status === "in" && styles.in,
+          item.status === "out" && styles.out,
+          item.status === "checking" && styles.checking,
+          item.status === "error" && styles.error,
+        ]}
+      >
+        {item.status === "checking" && "Kontrol ediliyor..."}
+        {item.status === "in" && "STOKTA"}
+        {item.status === "out" && "STOKTA DEĞİL"}
+        {item.status === "error" && "HATA"}
+      </Text>
+
+      <TouchableOpacity
+        style={styles.button}
+        onPress={() => checkProduct(item.id, item.url)}
+      >
+        <Text style={styles.buttonText}>Yeniden Kontrol</Text>
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Stok Takibi</Text>
+      <Text style={styles.title}>ZARA Stok Takibi</Text>
 
       <View style={styles.row}>
         <TextInput
+          placeholder="Zara ürün linki"
           value={url}
           onChangeText={setUrl}
-          placeholder="Ürün linki"
-          placeholderTextColor="#777"
           style={styles.input}
+          autoCapitalize="none"
         />
-        <Pressable style={styles.addBtn} onPress={addItem}>
+        <TouchableOpacity style={styles.add} onPress={addProduct}>
           <Text style={styles.addText}>Ekle</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       <FlatList
         data={items}
-        keyExtractor={(i) => i.id}
-        renderItem={({ item }) => (
-          <View style={styles.card}>
-            <Text style={styles.brand}>{item.brand}</Text>
-            <Text style={styles.url}>{item.url}</Text>
-
-            <Text
-              style={[
-                styles.status,
-                item.status === "IN" ? styles.in : styles.out,
-              ]}
-            >
-              {item.status === "IN" ? "STOKTA" : "STOKTA DEĞİL"}
-            </Text>
-
-            <View style={styles.actions}>
-              <Pressable
-                style={styles.btn}
-                onPress={() => recheck(item.id)}
-              >
-                {loadingId === item.id ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.btnText}>Yeniden Kontrol</Text>
-                )}
-              </Pressable>
-
-              <Pressable onPress={() => remove(item.id)}>
-                <Text style={styles.remove}>Sil</Text>
-              </Pressable>
-            </View>
-          </View>
-        )}
+        keyExtractor={(item) => item.id}
+        renderItem={renderItem}
+        contentContainerStyle={{ paddingBottom: 40 }}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    backgroundColor: "#0f0f0f",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  container: { flex: 1, padding: 16, backgroundColor: "#0f0f0f" },
-  title: { color: "#fff", fontSize: 22, fontWeight: "700", marginBottom: 12 },
+  container: { flex: 1, padding: 16, backgroundColor: "#fff" },
+  title: { fontSize: 20, fontWeight: "bold", marginBottom: 12 },
   row: { flexDirection: "row", marginBottom: 12 },
   input: {
     flex: 1,
-    backgroundColor: "#1e1e1e",
-    color: "#fff",
-    padding: 12,
-    borderRadius: 8,
-    marginRight: 8,
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 6,
+    padding: 10,
   },
-  addBtn: {
-    backgroundColor: "#3b82f6",
-    paddingHorizontal: 14,
-    justifyContent: "center",
-    borderRadius: 8,
-  },
-  addText: { color: "#fff", fontWeight: "700" },
-  card: {
-    backgroundColor: "#1b1b1b",
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  brand: { color: "#fff", fontWeight: "700" },
-  url: { color: "#aaa", fontSize: 12 },
-  status: { marginVertical: 6, fontWeight: "700" },
-  in: { color: "#22c55e" },
-  out: { color: "#ef4444" },
-  actions: { flexDirection: "row", gap: 14, alignItems: "center" },
-  btn: {
+  add: {
+    marginLeft: 8,
     backgroundColor: "#000",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
+    justifyContent: "center",
     borderRadius: 6,
   },
-  btnText: { color: "#fff", fontWeight: "700" },
-  remove: { color: "#f87171" },
+  addText: { color: "#fff", fontWeight: "bold" },
+  card: {
+    borderWidth: 1,
+    borderColor: "#eee",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  url: { fontSize: 12, color: "#333", marginBottom: 6 },
+  status: { fontWeight: "bold", marginBottom: 8 },
+  in: { color: "green" },
+  out: { color: "red" },
+  checking: { color: "orange" },
+  error: { color: "gray" },
+  button: {
+    backgroundColor: "#eee",
+    padding: 8,
+    borderRadius: 6,
+    alignItems: "center",
+  },
+  buttonText: { fontSize: 12 },
 });
