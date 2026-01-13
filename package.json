@@ -6,6 +6,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "expo": "^54.0.31",
     "express": "^4.19.2"
   }
 }
